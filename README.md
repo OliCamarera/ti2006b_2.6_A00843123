@@ -1,41 +1,32 @@
-# TI2006B · Soporte analítico para la toma de decisiones
+# Reto-FEMSA-Agua
 
-Repositorio base para la clase **TI2006B**, orientada a diseñar, evaluar y comunicar decisiones informadas en sistemas de información, plataformas analíticas y sistemas distribuidos.
+Auditoría de descargas de agua por planta (enero-octubre 2026): conciliación entre la bitácora de las plantas y Reporting Factory, con KPIs y semáforo de cumplimiento para Auditoría Interna.
 
-La clase combina Business Intelligence (BI), ingeniería de datos, Machine Learning (ML), visualización y arquitectura de software. El objetivo no es aprender una herramienta aislada, sino entender cómo el contexto de negocio, los datos, los costos, la confiabilidad, la seguridad y la operación cambian la decisión técnica.
+## Código (etapa 2 — SQL/SQLite)
 
-## Pregunta guía
+Pipeline en capas bronce/plata/oro, construido sobre `sqlite3`:
 
-> ¿Qué decisión debemos tomar, qué evidencia la respalda y qué consecuencias aceptamos al elegir una arquitectura o una herramienta?
+| Archivo | Capa | Qué hace |
+| --- | --- | --- |
+| `ingesta.py` | Bronce | Lee los Excel originales (bitácora + Reporting Factory) y los vuelca sin transformar a tablas `raw_*` en SQLite |
+| `exploracion.sql` | — | Perfilado y hallazgos (E1-E19): huecos, fórmulas rotas, negativos, picos, ceros, comparación bitácora vs RF |
+| `limpieza.sql` | Plata/Oro | Reglas R1-R9: catálogo de plantas, calendario real, interpolación de lecturas faltantes, volumen diario, detección de error de unidad en RF, KPIs y semáforo |
+| `resultados.sql` / `v1.sql` | Consumo | Consultas de resumen por planta, evolución mensual y validaciones de control |
+| `runsql.py` | Utilidad | Ejecuta cualquier `.sql` contra la base e imprime el resultado |
+| `modelo_estrella.sql` | Etapa 4 | Materializa el esquema en estrella de Etapa 3: `dim_tiempo_mes`, `dim_diagnostico` (dimensión basura) y `fact_conciliacion_mensual` (hecho limpio, solo llaves + métricas) |
+| `exportar_modelo_estrella.py` | Etapa 4 | Exporta las 4 tablas del esquema en estrella a un Excel para conectar Power BI sin driver ODBC |
 
-## Cómo navegar el repositorio
+### Cómo correrlo
 
-- [`docs/`](docs/): propósito, ruta de aprendizaje, criterios de decisión y CI/CD.
-- [`assignments/`](assignments/): entregas individuales para practicar análisis y comunicación.
-- [`activities/`](activities/): actividades breves de clase, laboratorios y discusiones.
-- [`projects/`](projects/): proyectos integradores con alcance y rúbrica iniciales.
-- [`templates/example-repository/`](templates/example-repository/): esqueleto que cada equipo replicará y adaptará para su proyecto.
+Los Excel originales y la base generada (`femsa.db`) **no se suben al repo** por confidencialidad (ver `.gitignore`). Para reproducir:
 
-## Ruta de aprendizaje
-
-1. **Problema y contexto:** objetivos, actores, restricciones y métricas de éxito.
-2. **Datos y evidencia:** calidad, gobernanza, sesgos, privacidad, trazabilidad y reproducibilidad.
-3. **Arquitectura:** batch/streaming, almacenamiento, integración, APIs, escalabilidad y resiliencia.
-4. **BI y visualización:** modelos semánticos, KPIs, dashboards y comunicación ejecutiva.
-5. **ML aplicado:** formulación, evaluación, explicabilidad, riesgo y operación de modelos.
-6. **Plataformas:** comparación razonada de alternativas como Snowflake, Power BI, Tableau y servicios equivalentes.
-7. **Decisión y operación:** ADRs, costos, seguridad, observabilidad, CI/CD y revisión posterior.
-
-## Convenciones para entregas
-
-Cada decisión importante debe incluir:
-
-- contexto y alternativas consideradas;
-- criterios y pesos de evaluación;
-- evidencia, supuestos y riesgos;
-- decisión tomada y consecuencias aceptadas;
-- plan de validación y condiciones para revisarla.
-
-## Licencia
-
-El material original de este repositorio se publica bajo [CC0 1.0 Universal](LICENSE). Las herramientas, datasets y referencias externas conservan sus propias licencias; cada entrega debe documentarlas.
+```bash
+pip install openpyxl pandas
+python ingesta.py "Bitacora descargas 2026.xlsx" "ReportingFactory Ene26 - Oct26.xlsx" femsa.db
+python runsql.py femsa.db limpieza.sql
+python runsql.py femsa.db exploracion.sql
+python runsql.py femsa.db resultados.sql
+python runsql.py femsa.db v1.sql
+python runsql.py femsa.db modelo_estrella.sql
+python exportar_modelo_estrella.py
+```
